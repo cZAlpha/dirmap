@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+import os
+import sys
+import argparse
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+def check_max_depth(directory):
+   """Check the maximum depth of the directory structure"""
+   max_depth = 0
+   for root, dirs, files in os.walk(directory):
+      depth = root[len(directory):].count(os.sep)
+      if depth > max_depth:
+         max_depth = depth
+   return max_depth
+
+def create_xml_map(directory, parent_element):
+   """Recursively create XML structure of directory"""
+   try:
+      items = sorted(os.listdir(directory))
+   except PermissionError:
+      return
+   
+   for item in items:
+      if item in ['.git', '.gitignore', '.DS_Store']:  # Skip .git, .gitignore, and .DS_Store
+         continue
+      item_path = os.path.join(directory, item)
+      if os.path.isdir(item_path):
+         dir_element = ET.SubElement(parent_element, 'directory', {'name': item})
+         create_xml_map(item_path, dir_element)
+      else:
+         ET.SubElement(parent_element, 'file', {'name': item})
+
+def print_friendly_map(directory, prefix=""):
+   """Print user-friendly directory structure"""
+   try:
+      items = sorted(os.listdir(directory))
+   except PermissionError:
+      print(prefix + "└── [Permission Denied]")
+      return
+   
+   for i, item in enumerate(items):
+      if item in ['.git', '.gitignore', '.DS_Store']:  # Skip .git, .gitignore, and .DS_Store
+         continue
+      item_path = os.path.join(directory, item)
+      is_last = i == len(items) - 1
+      
+      if os.path.isdir(item_path):
+         print(prefix + ("└── " if is_last else "├── ") + "📁 " + item)
+         new_prefix = prefix + ("    " if is_last else "│   ")
+         print_friendly_map(item_path, new_prefix)
+      else:
+         print(prefix + ("└── " if is_last else "├── ") + "📄 " + item)
+
+def main():
+   parser = argparse.ArgumentParser(description='Generate a map of directory structure')
+   parser.add_argument('directory', help='Directory to map')
+   parser.add_argument('-s', '--save', nargs='?', const=True, metavar='PATH', help='Save XML file (to desktop if no path specified)')
+   
+   args = parser.parse_args()
+   
+   if not os.path.isdir(args.directory):
+      print(f"Error: {args.directory} is not a valid directory")
+      sys.exit(1)
+   
+   abs_directory = os.path.abspath(args.directory)
+   max_depth = check_max_depth(abs_directory)
+   print(f"Scanning: {abs_directory}")
+   print(f"Maximum directory depth: {max_depth} levels")
+   
+   if max_depth > 10:
+      response = input("Warning: Depth exceeds 10 levels. This may take a while. Continue? (y/n): ")
+      if response.lower() != 'y':
+         print("Operation cancelled")
+         sys.exit(0)
+   
+   # Printing the user-friendly map to the console
+   print("\nDirectory Structure:")
+   print_friendly_map(abs_directory)
+   
+   # Determining save location and saving 
+   if hasattr(args, 'save') and args.save is not None:
+      if args.save == True:  # -s was passed without a path
+         save_path = os.path.join(str(Path.home()), 'Desktop', 'directory_map.xml')
+      elif not os.path.isabs(args.save):  # -s was passed with a relative path
+         print("Error: Save path must be absolute")
+         sys.exit(1)
+      else:  # -s was passed with an absolute path
+         save_path = args.save
+   else:  # If no -s flag was passed, don't save at all
+      save_path = None
+
+   # Only create XML and save if save_path is set
+   if save_path:
+      # Create XML structure
+      root = ET.Element('directory', {'name': os.path.basename(abs_directory)})
+      create_xml_map(abs_directory, root)
+      
+      # Write to file
+      tree = ET.ElementTree(root)
+      tree.write(save_path, encoding='utf-8', xml_declaration=True)
+      print(f"\nXML map saved to: {save_path}")
+
+
+if __name__ == '__main__':
+   main()
