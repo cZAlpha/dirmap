@@ -4,6 +4,8 @@ import sys
 import argparse
 import xml.etree.ElementTree as ET
 from pathlib import Path
+import datetime
+
 
 def check_max_depth(directory):
    """Check the maximum depth of the directory structure"""
@@ -55,9 +57,15 @@ def print_friendly_map(directory, prefix=""):
 def main():
    parser = argparse.ArgumentParser(description='Generate a map of directory structure')
    parser.add_argument('directory', help='Directory to map')
-   parser.add_argument('-s', '--save', nargs='?', const=True, metavar='PATH', help='Save XML file (to desktop if no path specified)')
+   parser.add_argument('-s', '--save', nargs='?', const=True, metavar='PATH', help='Save file (to desktop if no path specified)')
+   parser.add_argument('-u', '--user-friendly', action='store_true', help='Save user-friendly version (must be used with -s)')
    
    args = parser.parse_args()
+   
+   # Check if -u is used without -s
+   if args.user_friendly and not hasattr(args, 'save'):
+      print("Error: -u/--user-friendly must be used with -s/--save")
+      sys.exit(1)
    
    if not os.path.isdir(args.directory):
       print(f"Error: {args.directory} is not a valid directory")
@@ -81,7 +89,10 @@ def main():
    # Determining save location and saving 
    if hasattr(args, 'save') and args.save is not None:
       if args.save == True:  # -s was passed without a path
-         save_path = os.path.join(str(Path.home()), 'Desktop', 'directory_map.xml')
+         if args.user_friendly:
+            save_path = os.path.join(str(Path.home()), 'Desktop', 'directory_map.txt')
+         else:
+            save_path = os.path.join(str(Path.home()), 'Desktop', 'directory_map.xml')
       elif not os.path.isabs(args.save):  # -s was passed with a relative path
          print("Error: Save path must be absolute")
          sys.exit(1)
@@ -90,16 +101,33 @@ def main():
    else:  # If no -s flag was passed, don't save at all
       save_path = None
 
-   # Only create XML and save if save_path is set
+   # Only save if save_path is set
    if save_path:
-      # Create XML structure
-      root = ET.Element('directory', {'name': os.path.basename(abs_directory)})
-      create_xml_map(abs_directory, root)
-      
-      # Write to file
-      tree = ET.ElementTree(root)
-      tree.write(save_path, encoding='utf-8', xml_declaration=True)
-      print(f"\nXML map saved to: {save_path}")
+      if args.user_friendly:
+         # Save user-friendly version to text file
+         import io
+         from contextlib import redirect_stdout
+         
+         f = io.StringIO()
+         with redirect_stdout(f):
+            print_friendly_map(abs_directory)
+         friendly_output = f.getvalue()
+         
+         with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(f"Directory Map: {abs_directory}\n")
+            f.write(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("=" * 50 + "\n")
+            f.write(friendly_output)
+         print(f"\nUser-friendly map saved to: {save_path}")
+      else:
+         # Create XML structure
+         root = ET.Element('directory', {'name': os.path.basename(abs_directory)})
+         create_xml_map(abs_directory, root)
+         
+         # Write to file
+         tree = ET.ElementTree(root)
+         tree.write(save_path, encoding='utf-8', xml_declaration=True)
+         print(f"\nXML map saved to: {save_path}")
 
 
 if __name__ == '__main__':
