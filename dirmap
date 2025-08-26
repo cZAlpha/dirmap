@@ -59,12 +59,13 @@ def main():
    parser.add_argument('directory', help='Directory to map')
    parser.add_argument('-s', '--save', nargs='?', const=True, metavar='PATH', help='Save file (to desktop if no path specified)')
    parser.add_argument('-u', '--user-friendly', action='store_true', help='Save user-friendly version (must be used with -s)')
+   parser.add_argument('-m', '--markdown', action='store_true', help='Save markdown-compatible version (must be used with -s)')
    
    args = parser.parse_args()
    
-   # Check if -u is used without -s
-   if args.user_friendly and not hasattr(args, 'save'):
-      print("Error: -u/--user-friendly must be used with -s/--save")
+   # Check if -u or -m is used without -s
+   if (args.user_friendly or args.markdown) and not hasattr(args, 'save'):
+      print("Error: -u/--user-friendly and -m/--markdown must be used with -s/--save")
       sys.exit(1)
    
    if not os.path.isdir(args.directory):
@@ -91,6 +92,8 @@ def main():
       if args.save == True:  # -s was passed without a path
          if args.user_friendly:
             save_path = os.path.join(str(Path.home()), 'Desktop', 'directory_map.txt')
+         elif args.markdown:
+            save_path = os.path.join(str(Path.home()), 'Desktop', 'directory_map.md')
          else:
             save_path = os.path.join(str(Path.home()), 'Desktop', 'directory_map.xml')
       elif not os.path.isabs(args.save):  # -s was passed with a relative path
@@ -100,8 +103,8 @@ def main():
          save_path = args.save
    else:  # If no -s flag was passed, don't save at all
       save_path = None
-
-   # Only save if save_path is set
+   
+      # Only save if save_path is set
    if save_path:
       if args.user_friendly:
          # Save user-friendly version to text file
@@ -119,6 +122,25 @@ def main():
             f.write("=" * 50 + "\n")
             f.write(friendly_output)
          print(f"\nUser-friendly map saved to: {save_path}")
+      elif args.markdown:
+         # Save markdown-compatible version
+         import io
+         from contextlib import redirect_stdout
+         
+         f = io.StringIO()
+         with redirect_stdout(f):
+            print_friendly_map(abs_directory)
+         friendly_output = f.getvalue()
+         
+         # Add <br> tags at the end of each line for markdown compatibility
+         markdown_output = friendly_output.replace('\n', '<br>\n')
+         
+         with open(save_path, 'w', encoding='utf-8') as f:
+            f.write(f"Directory Map: {abs_directory}<br>\n")
+            f.write(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}<br>\n")
+            f.write("=" * 50 + "<br>\n")
+            f.write(markdown_output)
+         print(f"\nMarkdown-compatible map saved to: {save_path}")
       else:
          # Create XML structure
          root = ET.Element('directory', {'name': os.path.basename(abs_directory)})
